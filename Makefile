@@ -11,6 +11,10 @@ OPT       ?= -O3
 CFLAGS    ?= -std=gnu99 $(WARNS) $(DEBUG) $(OPT)
 LDFLAGS   ?=
 
+ifeq ("${CC}", "clang")
+WARNS	+=  -Wno-gnu-zero-variadic-macro-arguments
+endif
+
 MACRO11_SRCS = macro11.c \
 	assemble.c assemble_globals.c assemble_aux.c	\
 	extree.c listing.c macros.c parse.c rept_irpc.c symbols.c \
