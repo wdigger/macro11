@@ -1021,7 +1021,7 @@ EX_TREE        *parse_unary(
 EX_TREE        *parse_binary(
     char *cp,
     char term,
-    int depth)
+    int prec)
 {
     EX_TREE        *leftp,
                    *rightp,
@@ -1037,7 +1037,7 @@ EX_TREE        *parse_binary(
 
         switch (*cp) {
         case '+':
-            if (depth >= ADD_PREC)
+            if (prec >= ADD_PREC)
                 return leftp;
 
             rightp = parse_binary(cp + 1, term, ADD_PREC);
@@ -1046,7 +1046,7 @@ EX_TREE        *parse_binary(
             break;
 
         case '-':
-            if (depth >= ADD_PREC)
+            if (prec >= ADD_PREC)
                 return leftp;
 
             rightp = parse_binary(cp + 1, term, ADD_PREC);
@@ -1055,7 +1055,7 @@ EX_TREE        *parse_binary(
             break;
 
         case '*':
-            if (depth >= MUL_PREC)
+            if (prec >= MUL_PREC)
                 return leftp;
 
             rightp = parse_binary(cp + 1, term, MUL_PREC);
@@ -1064,7 +1064,7 @@ EX_TREE        *parse_binary(
             break;
 
         case '/':
-            if (depth >= MUL_PREC)
+            if (prec >= MUL_PREC)
                 return leftp;
 
             rightp = parse_binary(cp + 1, term, MUL_PREC);
@@ -1073,7 +1073,7 @@ EX_TREE        *parse_binary(
             break;
 
         case '!':
-            if (depth >= OR_PREC)
+            if (prec >= OR_PREC)
                 return leftp;
 
             rightp = parse_binary(cp + 1, term, OR_PREC);
@@ -1082,7 +1082,7 @@ EX_TREE        *parse_binary(
             break;
 
         case '&':
-            if (depth >= AND_PREC)
+            if (prec >= AND_PREC)
                 return leftp;
 
             rightp = parse_binary(cp + 1, term, AND_PREC);
@@ -1091,7 +1091,7 @@ EX_TREE        *parse_binary(
             break;
 
         case '_':
-            if (STRICTEST || symbol_allow_underscores || depth >= LSH_PREC) {
+            if (STRICTEST || symbol_allow_underscores || prec >= LSH_PREC) {
                 report_warn(NULL, "'_' is not strictly allowed\n");
             /*  return leftp;  */
             }
