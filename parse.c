@@ -1091,9 +1091,11 @@ EX_TREE        *parse_binary(
             break;
 
         case '_':
-            if (STRICTEST || symbol_allow_underscores || prec >= LSH_PREC) {
-                report_warn(NULL, "'_' is not strictly allowed\n");
-            /*  return leftp;  */
+            if (symbol_allow_underscores || prec >= LSH_PREC) {
+                return leftp;
+            }
+            if (STRICTEST) {
+                report_warn(NULL, "operator '_' is not strictly allowed\n");
             }
 
             rightp = parse_binary(cp + 1, term, LSH_PREC);
