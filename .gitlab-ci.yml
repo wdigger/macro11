@@ -11,22 +11,25 @@ before_script:
 
 # Defines stages which are to be executed
 stages:
-  - build-gcc
-  - build-clang
+  - build-and-test
 
-# Stage "build"
 run-build-gcc:
-  stage: build-gcc
+  stage: build-and-test
+  image: gcc
   script:
-    - apt-get install -y gcc
+    - gcc --version
     - make
     - cd tests && ./RunTests
 
-# Stage "build-clang"
+# It is totally stupid that there is no pre-built image with clang available
+# locally -- there isn't even a list of locally available images... so we just
+# have to be less efficient.
 run-build-clang:
-  stage: build-clang
+  stage: build-and-test
+  image: silkeh/clang
   script:
-    - apt-get install -y clang
+#   - apt-get install -y clang
+    - clang --version
     - CC=clang make
     - cd tests && ./RunTests
 
