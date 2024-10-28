@@ -729,6 +729,19 @@ int parse_float(
     }
     DF("float_sign: %d\n", float_sign);
 
+    /*
+     * There are 3 phases to parsing the floating point number.
+     * Pgase 1: collect the mantissa and base-10 exponent.
+     * We can use integers for both of them. We simply ignore the
+     * decimal point in the mantissa and correct for it in the exponent:
+     * 1.23 is 123 E -1.
+     * If we have so many digits that collecting the next one would
+     * overflow (lose bits on the left), we ignore the digit but
+     * increment the base-10 exponent instead. This way we lose only
+     * precision, not the value.
+     * If an exponent follows, it is added to the value collected so
+     * far.
+     */
     while (!EOL(*cp)) {
         if (isdigit((unsigned char)*cp)) {
             /* Can we multiply by 10? */
@@ -786,6 +799,40 @@ int parse_float(
 
     if (endp)
         *endp = cp;
+
+    /*
+     * Phase 2: convert base-10 exponent to a base-2 exponent.
+     * This is needed only if it is not 0.
+     *
+     * There are 2 possibilities:
+     *
+     * - exponent > 0: each iteration, decrease the base-10 exponent.
+     *   To keep the stored value the same, we multiply the mantissa by
+     *   10.  Actually, we multiply by 5 and increase the base-2
+     *   exponent by 1.
+     *   If the mantissa becomes so large that we might lose bits on the
+     *   left, instead multiply by 5/4 and add 3 to the exponent.
+     *   For high enough values, first free up a bit on the left by a
+     *   shift to the right, and add 1 to the base-2 exponent to keep
+     *   the value the same.
+     *
+     * - exponent < 0: each iteration, increase the base-10 exponent.
+     *   To keep the stored value the same, we divide the mantissa by 10.
+     *   To retain precision we shift our value left as far as possible
+     *   and maintain the value by decreasing the base-2 exponent.
+     *   And instead of dividing by 10, we divide by 2 and then by 5
+     *   while also multiplying by 8 (and adjusting the base-2
+     *   exponent). This keeps the significant bits more or less in
+     *   place (a fractional bit to the left, but we freed a full bit
+     *   there so it won't overflow), instead of shifting log2(10)
+     *   (3.322) bits to the right.
+     *
+     *   The PDP-11 reference code didn't even divide by 5 (it is a
+     *   64-bit divide) but instead multiplied by 65-bit number
+     *   0x19...99 which is (2**64 - 1) / 5. The desired result is the
+     *   higher 64 bits of the 128 bits result. It is very slightly off,
+     *   because of the "- 1". It used a shift-and-add loop.
+     */
 
     /* FLTG3 */
     if (float_buf) {
@@ -892,6 +939,16 @@ int parse_float(
             float_dec_exponent++;
             DUMP3;
         }
+
+        /*
+         * Final phase: normalize the result so far and pack it into the
+         * output. For shorter outputs we need to round.
+         *
+         * For some values that have an exact representation, we may
+         * have an infinite number of fractional 1 bits on the right. We
+         * use the fact that 0.111... equals 1.000... (same as how in
+         * decimal, 0.999... equals 1.000...)
+         */
 
         /* Normalize the mantissa: shift a single 1 out to the left */
         DF("Normalize the mantissa: shift a single 1 out to the left\n");
