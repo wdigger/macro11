@@ -731,10 +731,10 @@ int parse_float(
 
     /*
      * There are 3 phases to parsing the floating point number.
-     * Pgase 1: collect the mantissa and base-10 exponent.
+     * Phase 1: collect the mantissa and base-10 exponent.
      * We can use integers for both of them. We simply ignore the
      * decimal point in the mantissa and correct for it in the exponent:
-     * 1.23 is 123 E -1.
+     * 1.23 is 123 E -2.
      * If we have so many digits that collecting the next one would
      * overflow (lose bits on the left), we ignore the digit but
      * increment the base-10 exponent instead. This way we lose only
