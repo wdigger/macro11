@@ -3,7 +3,7 @@
 If run with no options, it prints a usage screen:
 
 ```
-obj2bin.pl v2.1 by Don North (perl 5.03)
+obj2bin.pl v2.4 by Don North (perl 5.036)
 Usage: ./obj2bin.pl [options...] arguments
        --help                  output manpage and exit
        --debug                 enable debug mode
@@ -11,6 +11,8 @@ Usage: ./obj2bin.pl [options...] arguments
        --boot                  M9312 boot prom .hex
        --console               M9312 console/diagnostic prom .hex
        --binary                binary program load image .bin [default]
+       --image                 binary data output 0..65535 .img
+       --raw                   binary data output ADRmin..ADRmax .raw
        --ascii                 ascii m9312 program load image .txt
        --rt11                  read .obj files in RT11 format
        --rsx11                 read .obj files in RSX11 format [default]
@@ -29,7 +31,7 @@ NAME
     obj2bin.pl - Convert a Macro-11 program image to PROM/load format
 
 SYNOPSIS
-    obj2bin.pl [--help] [--debug] [--verbose] [--boot] [--console] [--binary]
+    obj2bin.pl [--help] [--debug] [--verbose] [--boot] [--console] [--raw] [--binary]
     [--ascii] [--rt11] [--rsx11] [--bytes=N] [--nocrc] [--logfile=LOGFILE]
     --outfile=BINFILE OBJFILE
 
@@ -77,6 +79,12 @@ OPTIONS
 
         Binary format is the default if no other option is specified. If more
         than one option is specified the last one takes effect.
+
+    --image
+        Generate raw data file that is a full 64Kx8 memory image.
+
+    --raw
+        Generate raw data format file that comprises only bytes ADRmin..ADRmax.
 
     --rt11
         Read input object files in RT-11 format.
@@ -143,7 +151,7 @@ EXAMPLES
       obj2bin.pl --verbose --binary --rsx11 --out prftst.bin prftst.obj mac/printf.obj
 
 AUTHOR
-    Don North - donorth <ak6dn _at_ mindspring _dot_ com>
+    Don North - donorth <ak6dn _at_ arrl _dot_ net>
 
 HISTORY
     Modification history:
@@ -158,5 +166,8 @@ HISTORY
       2017-05-04 v1.95 donorth - Updated capability to read multiple input .obj files.
       2020-03-06 v2.0  donorth - Updated help documentation and README.md file.
       2020-03-10 v2.1  donorth - Broke down and added RSX-11 input format option.
+      2023-07-06 v2.2  donorth - Added binmode($fh) on object input and binary output files.
+      2024-03-22 v2.3  MattisLind/donorth - Added raw data format output via --raw option.
+      2025-09-11 v2.4  donorth - Added image data format to output a 64KB full memory image.
 
 ```

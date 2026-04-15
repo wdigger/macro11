@@ -1,7 +1,7 @@
 #!/usr/bin/perl -w
 #!/usr/local/bin/perl -w
 
-# Copyright (c) 2005-2016 Don North
+# Copyright (c) 2005-2023 Don North
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -46,6 +46,8 @@ S<[--verbose]>
 S<[--boot]>
 S<[--console]>
 S<[--binary]>
+S<[--image]>
+S<[--raw]>
 S<[--ascii]>
 S<[--rt11]>
 S<[--rsx11]>
@@ -110,6 +112,14 @@ runnable program images (used to write custom diaqnostics).
 
 Binary format is the default if no other option is specified.
 If more than one option is specified the last one takes effect.
+
+=item B<--image>
+
+Generate raw data file that is a full 64KB memory image.
+
+=item B<--raw>
+
+Generate raw data format file that comprises only bytes ADRMIN..ADRMAX.
 
 =item B<--rt11>
 
@@ -198,6 +208,9 @@ Modification history:
   2017-05-04 v1.95 donorth - Updated capability to read multiple input .obj files.
   2020-03-06 v2.0  donorth - Updated help documentation and README.md file.
   2020-03-10 v2.1  donorth - Broke down and added RSX-11 input format option.
+  2023-07-06 v2.2  donorth - Added binmode($fh) on object input and binary output files.
+  2024-03-22 v2.3  MattisLind/donorth - Added raw data format output via --raw option.
+  2025-09-11 v2.4  donorth - Added image data format to output a 64KB full memory image.
 
 =cut
 
@@ -218,7 +231,7 @@ BEGIN { unshift(@INC, $FindBin::Bin);
 # external local modules
 
 # generic defaults
-my $VERSION = 'v2.1'; # version of code
+my $VERSION = 'v2.4'; # version of code
 my $HELP = 0; # set to 1 for man page output
 my $DEBUG = 0; # set to 1 for debug messages
 my $VERBOSE = 0; # set to 1 for verbose messages
@@ -245,6 +258,8 @@ my $NOERROR = GetOptions( "help"        => \$HELP,
 			  "boot"        => sub { $romtype = 'BOOT'; },
 			  "console"     => sub { $romtype = 'DIAG'; },
 			  "binary"      => sub { $romtype = 'BINA'; },
+			  "raw"         => sub { $romtype = 'RAWA'; },
+			  "image"       => sub { $romtype = 'IMGA'; },
 			  "ascii"       => sub { $romtype = 'ASC9'; },
 			  "rt11"        => sub { $objtype = 'RT11'; },
 			  "rsx11"       => sub { $objtype = 'RSX11'; },
@@ -286,6 +301,8 @@ unless ($NOERROR
        --boot                  M9312 boot prom .hex
        --console               M9312 console/diagnostic prom .hex
        --binary                binary program load image .bin [default]
+       --image                 binary data output 0..65535 .img
+       --raw                   binary data output ADRmin..ADRmax .raw
        --ascii                 ascii m9312 program load image .txt
        --rt11                  read .obj files in RT11 format
        --rsx11                 read .obj files in RSX11 format [default]
@@ -339,9 +356,9 @@ if ($romtype eq 'BOOT') {
     $romfill = 0x00; # rom fill pattern
     $rombase = 0165000; # base address of rom
 
-} elsif ($romtype eq 'BINA' || $romtype eq 'ASC9') {
+} elsif ($romtype eq 'BINA' || $romtype eq 'ASC9' || $romtype eq 'RAWA' || $romtype eq 'IMGA') {
 
-    # program load image ... 56KB address space maximum
+    # program load image ... full address space
     %excaddr = ( ); # bytes to be skipped in rom crc calc
     $memsize = 7*8192; # number of instruction bytes allowed
     $memfill = 0x00; # memory fill pattern
@@ -401,6 +418,7 @@ foreach my $pass (1..2) {
 	my $OBJ = FileHandle->new("< ".$objfile);
 	die "Error: can't open input object file '$objfile'\n" unless defined $OBJ;
 	printf $LOG "\n\nPROCESS PASS %d FILE %d '%s'\n\n", $pass, $numb+1, $objfile if $DEBUG;
+	binmode($OBJ);
 	while (my @rec = &read_rec($OBJ)) { &parse_rec($numb+1, $pass, \@rec); }
 	$OBJ->close;
     }
@@ -442,7 +460,7 @@ if ($romtype eq 'BOOT' || $romtype eq 'DIAG') {
 	$buf[$idx+3] = (($dat>>12)&0xF)^0x1;             # bits  15  14  13 ~12
     }
 
-} elsif ($romtype eq 'BINA' || $romtype eq 'ASC9') {
+} elsif ($romtype eq 'BINA' || $romtype eq 'ASC9' || $romtype eq 'RAWA' || $romtype eq 'IMGA') {
 
     # only copy the above instruction portion over
     for (my $adr = 0; $adr < $memsize; $adr += 1) {
@@ -502,6 +520,8 @@ if ($romtype eq 'BOOT' || $romtype eq 'DIAG') {
     # there is no checksum.  If the origin is not 000001, then the origin is
     # the PC at which to start the program.
 
+    binmode($OUT);
+
     $bytesper = 128 if $bytesper <= 0;
 
     my $start = $program{START}{ADDRESS};
@@ -536,7 +556,21 @@ if ($romtype eq 'BOOT' || $romtype eq 'DIAG') {
     # start program exec here
     printf $OUT "L %o\r\nS\r\n", $adrmin;
 
-}
+} elsif ($romtype eq 'RAWA') {
+
+    # raw format data output as just data bytes from ADRmin..ADRmax
+
+    # output the used PROM buffer as a binary data file
+    binmode($OUT); print $OUT pack("C*", @buf[$adrmin..$adrmax]);
+
+} elsif ($romtype eq 'IMGA') {
+
+    # raw format data output as all data bytes 0..65535
+
+    # output the full PROM buffer as a binary data file
+    binmode($OUT); print $OUT pack("C*", @buf[$rombase..$romsize-1]);
+
+} 
 
 # all done
 $OUT->close;
