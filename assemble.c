@@ -248,6 +248,57 @@ int get_mode_check(
 }
 
 
+int calculate_branch_offset(
+    STREAM *str,
+    EX_TREE *value,
+    int quiet,
+    unsigned int *offset_ret)
+{
+    unsigned int offset = 0;
+
+    /* Relative PSECT or absolute? */
+    if (current_pc->section->flags & PSECT_REL) {
+        SYMBOL         *sym = NULL;
+
+        /* Can't branch unless I can
+           calculate the offset. */
+
+        /* You know, I *could* branch
+           between sections if I feed the
+           linker a complex relocation
+           expression to calculate the
+           offset.  But I won't. */
+
+        if (!express_sym_offset(value, &sym, &offset)
+            || sym->section != current_pc->section) {
+            if (!quiet) {
+                report_err(str, "Bad branch target (%s)\n",
+                           sym ? "not same section"
+                               : "can't express offset");
+            }
+            return 0;
+        }
+
+        /* Compute the branch offset and
+           check for addressability */
+        offset += sym->value;
+        offset -= DOT + 2;
+    } else {
+        if (value->type != EX_LIT) {
+            if (!quiet) {
+                report_err(str, "Bad branch target (not literal; ABS section)\n");
+            }
+            return 0;
+        }
+
+        offset = value->data.lit - (DOT + 2);
+    }
+
+    *offset_ret = offset;
+
+    return 1;
+}
+
 /* assemble - read a line from the input stack, assemble it. */
 
 /* This function is way way too large, because I just coded most of
@@ -2396,6 +2447,24 @@ do_mcalled_macro:
                                 /* But encode it anyway... */
                             }
 
+                            /* Maybe a JMP could have been a BR? */
+                            if (op->value == I_JMP) {
+                                unsigned int offset;
+
+                                /* Only for 067 (PC-relative) or 037 (absolute) modes */
+                                if ((mode.type == (MODE_OFFSET|MODE_PC) || mode.type == (MODE_INDIRECT|MODE_AUTO_INCR|MODE_PC)) &&
+                                    mode.offset != NULL &&
+                                    calculate_branch_offset(
+                                        stack->top, mode.offset, 0 /*1*/, &offset)) {
+
+                                    if ((int)offset >= -256 && (int)offset <= 254) {
+                                        report_warn(stack->top, "JMP over short distance (%d.) could be BR\n", offset);
+                                    }
+                                } else {
+                                    /**/report_warn(stack->top, "JMP: can't calculate offset\n");
+                                }
+                            }
+
                             /* Build instruction word */
                             word = op->value | mode.type;
                             store_word(stack->top, tr, 2, word);
@@ -2458,6 +2527,7 @@ do_mcalled_macro:
                             value = parse_expr(cp, 0);
                             cp = value->cp;
 
+#if 0
                             /* Relative PSECT or absolute? */
                             if (current_pc->section->flags & PSECT_REL) {
                                 SYMBOL         *sym = NULL;
@@ -2495,6 +2565,14 @@ do_mcalled_macro:
 
                                 offset = value->data.lit - (DOT + 2);
                             }
+#else
+                            if (!calculate_branch_offset(
+                                        stack->top, value, 0, &offset)) {
+                                store_word(stack->top, tr, 2, op->value);
+                                free_tree(value);
+                                return 0;
+                            }
+#endif
 
                             if (!check_branch(stack, offset, -256, 255))
                                 offset = 0;
