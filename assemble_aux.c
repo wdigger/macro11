@@ -11,6 +11,7 @@
 
 #include "assemble.h"
 #include "assemble_globals.h"
+#include "elfobj.h"
 #include "listing.h"
 #include "macros.h"
 #include "parse.h"
@@ -71,6 +72,8 @@ int store_word(
     int size,
     unsigned word)
 {
+    if (elf_symbols)
+        elfobj_line(current_pc->section, DOT, str->name, str->line);
     if (size == 1)
         if((word & 0x8000) ? word < 0xff00 : word > 0xff)
             report_warn(str, "Truncated BYTE %o to %o\n", word, word & 0xff);
@@ -89,6 +92,8 @@ static int store_displaced_word(
     int size,
     unsigned word)
 {
+    if (elf_symbols)
+        elfobj_line(current_pc->section, DOT, str->name, str->line);
     change_dot(tr, size);
     list_word(str, DOT, word, size, "'");
     return text_displaced_word(tr, &DOT, size, word);
@@ -101,6 +106,8 @@ static int store_global_displaced_offset_word(
     unsigned word,
     char *global)
 {
+    if (elf_symbols)
+        elfobj_line(current_pc->section, DOT, str->name, str->line);
     change_dot(tr, size);
     list_word(str, DOT, word, size, "G");
     return text_global_displaced_offset_word(tr, &DOT, size, word, global);
@@ -113,6 +120,8 @@ static int store_global_offset_word(
     unsigned word,
     char *global)
 {
+    if (elf_symbols)
+        elfobj_line(current_pc->section, DOT, str->name, str->line);
     change_dot(tr, size);
     list_word(str, DOT, word, size, "G");
     return text_global_offset_word(tr, &DOT, size, word, global);
@@ -124,6 +133,8 @@ static int store_internal_word(
     int size,
     unsigned word)
 {
+    if (elf_symbols)
+        elfobj_line(current_pc->section, DOT, str->name, str->line);
     change_dot(tr, size);
     list_word(str, DOT, word, size, "'");
     return text_internal_word(tr, &DOT, size, word);
@@ -136,6 +147,8 @@ static int store_psect_displaced_offset_word(
     unsigned word,
     char *name)
 {
+    if (elf_symbols)
+        elfobj_line(current_pc->section, DOT, str->name, str->line);
     change_dot(tr, size);
     list_word(str, DOT, word, size, "'");
     return text_psect_displaced_offset_word(tr, &DOT, size, word, name);
@@ -148,6 +161,8 @@ static int store_psect_offset_word(
     unsigned word,
     char *name)
 {
+    if (elf_symbols)
+        elfobj_line(current_pc->section, DOT, str->name, str->line);
     change_dot(tr, size);
     list_word(str, DOT, word, size, "'");
     return text_psect_offset_word(tr, &DOT, size, word, name);
@@ -856,6 +871,21 @@ void write_psect_globals(
 
         if (gsd)
             gsd_psect(gsd, psect->label, psect->flags, psect->size);
+
+        /* With -elf, a p-sect with no global of the module's own in it
+           gets one at its start, so that the addresses in the ELF
+           file's DWARF have something to be relocated against; see
+           elfobj_anchor.  */
+        if (gsd && elf_symbols) {
+            unsigned        bias;
+            int             define;
+            const char     *anchor = elfobj_anchor(psect, &bias, &define);
+
+            if (anchor != NULL && define)
+                gsd_global(gsd, (char *) anchor,
+                           GLOBAL_DEF | ((psect->flags & PSECT_REL) ? GLOBAL_REL : 0)
+                           | 0100, 0);
+        }
         psect->sector = isect;         /* Assign it a sector */
         psect->pc = 0;                 /* Reset its PC for second pass */
 

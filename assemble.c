@@ -12,6 +12,7 @@
 
 #include "assemble_aux.h"
 #include "assemble_globals.h"
+#include "elfobj.h"
 #include "extree.h"
 #include "listing.h"
 #include "macros.h"
@@ -402,6 +403,8 @@ O    75                                         .endc
 
             if (sym == NULL)
                 report_err(stack->top, "Invalid label definition '%s'\n", label);
+            else if (elf_symbols)
+                elfobj_sym(sym, stack->top->name, stack->top->line);
 
             free(label);
 
@@ -585,8 +588,11 @@ O    75                                         .endc
                 }
             }
 
-            if (sym != NULL)
+            if (sym != NULL) {
                 list_symbol(stack->top, sym);
+                if (elf_symbols)
+                    elfobj_sym(sym, stack->top->name, stack->top->line);
+            }
 
             free_tree(value);
             free(label);

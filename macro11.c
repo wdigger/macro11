@@ -60,6 +60,7 @@ DAMAGE.
 #include "assemble.h"
 #include "assemble_aux.h"
 #include "assemble_globals.h"
+#include "elfobj.h"
 #include "listing.h"
 #include "macros.h"
 #include "object.h"
@@ -185,7 +186,7 @@ static void print_help(
     printf("Usage:\n");
     printf("  " PROGRAM_NAME " [-o <file>] [-l {- | <file>}] [-p1 | -p2] [-se] [-sp] [-fe[2]]\n");
     printf("          [-h] [-v] [-apb] [-ff] [-e <options>] [-d <options>] [-dc <options>]\n");
-    printf("          [-a0] [-rsx | -rt11] [-stringent | -strict | -relaxed]\n");
+    printf("          [-a0] [-rsx | -rt11] [-elf <file>] [-stringent | -strict | -relaxed]\n");
     printf("          [-ym11] [-ysl <num>] [-yus] [-yfl] [-ylls] [-yl1] [-yd]\n");
     printf("          [-s [\"]<statement>[\"]] [-s ...]\n");
     printf("          [-nodev] [-nodir]\n");
@@ -225,6 +226,11 @@ static void print_help(
     printf("-nodir     Ignore '[directory]' style names in .INCLUDE and .LIBRARY filenames.\n");
     printf("-rsx       Generate RSX style object files%s.\n",  (!rt11 ? " (default)" : ""));
     printf("-rt11      Generate RT-11 style object files%s.\n", (rt11 ? " (default)" : ""));
+    printf("-elf       Also write the module's symbols and line numbers to <file>\n");
+    printf("           as DWARF in an ELF object, for the tools that read it (gdb,\n");
+    printf("           addr2line).  Link it beside the object module from -o, which\n");
+    printf("           still carries the code and gains a global per p-sect for the\n");
+    printf("           addresses in <file> to be relocated against.\n");
     printf("\n");
     printf("-m         load RSX-11 or RT-11 compatible macro library from which\n");
     printf("           .MCALLed macros can be found.  Similar to .LIBRARY directive.\n");
@@ -383,6 +389,8 @@ int main(
     int             nr_files = 0;
     int             nr_slines = 0;
     FILE           *obj = NULL;
+    FILE           *elffile = NULL;
+    char           *elfname = NULL;
     TEXT_RLD        tr;
     char           *objname = NULL;
     char           *lstname = NULL;
@@ -608,6 +616,14 @@ int main(
                 ignore_fn_dev = 1;
             } else if (!strcasecmp(cp, "nodir")) {
                 ignore_fn_dir = 1;
+            } else if (!strcasecmp(cp, "elf")) {
+                if (++arg >= argc) {
+                    fprintf(stderr, "-elf must be followed by a file name\n");
+                    print_help();
+                    return /* exit */ EXIT_FAILURE;
+                }
+                elfname = argv[arg];
+                elf_symbols = 1;
             } else if (!strcasecmp(cp, "rt11")) {
                 rt11 = 1;
             } else if (!strcasecmp(cp, "rsx")) {
@@ -639,6 +655,14 @@ int main(
         obj = fopen(objname, "wb");
         if (obj == NULL) {
             fprintf(stderr, "Unable to create object file %s\n", objname);
+            return /* exit */ EXIT_FAILURE;
+        }
+    }
+
+    if (elfname) {
+        elffile = fopen(elfname, "wb");
+        if (elffile == NULL) {
+            fprintf(stderr, "Unable to create ELF debug file %s\n", elfname);
             return /* exit */ EXIT_FAILURE;
         }
     }
@@ -724,6 +748,18 @@ int main(
 
     if (obj != NULL)
         fclose(obj);
+
+    /* The symbols and their line numbers, now that the second pass has
+       given them their values.  */
+    if (elffile != NULL) {
+        int             written = elfobj_write(elffile);
+
+        fclose(elffile);
+        if (!written) {
+            errcount++;
+            remove(elfname);    /* Better no file than a broken one */
+        }
+    }
 
     if (enabl_debug) {
         if (execute_p1 && execute_p2)
